@@ -54,7 +54,7 @@ def execute_query(cursor,query):
     result = cursor.fetchall()
     return result
     
-def disease_count_by_race(db_name, user_name, password, table_name='cmspop', disease):   
+def disease_count_by_race(col, db_name='hs611db', user_name='ATW', password='', table_name='cmspop', category = 'race'):   
     """
     Counts the number of cases of a specified disease for each race
 
@@ -68,8 +68,11 @@ def disease_count_by_race(db_name, user_name, password, table_name='cmspop', dis
         password corresponding to user_name
     table_name: str
         cmspop or table with identical column names
-    disease : str
-        Disease of interest
+    col : str
+        Boolean variable (Disease of interest for cmspop)
+    category: str
+        Categorical variable to separate counts by
+        Default is race for cmspop table 
 
     Returns
     -------
@@ -82,31 +85,43 @@ def disease_count_by_race(db_name, user_name, password, table_name='cmspop', dis
     /api/v1/freq/cancer
     """    
     diseases = ('heart_fail','alz_rel_sen','depression','cancer')
-    table_names = ('cmspop')
+    
     # Strip the user input to alpha characters only
-    cleaned_disease = re.sub('\W+', '', disease)
-    try:
-        if disease not in diseases:
-            raise AssertionError("Disease '{0}' is not allowed".format(cleaned_disease))
-        if table_name not in table_names:
-            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name))
+    if table_name == 'cmspop':
+        cleaned_disease = re.sub('\W+', '', col)
+        try:
+            if col not in diseases:
+                raise AssertionError("Disease '{0}' is not allowed".format(cleaned_disease))
+       
+            con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
+            query = """SELECT race, COUNT({1})::integer from {0}
+                    WHERE {1} = 't'
+                    GROUP BY {2};""".format(table_name,cleaned_disease,category)
+            result = execute_query(cur, query)
+    
+            disease_counts = {col+'_count':[]}
+            for row in result:
+                count = {'race':row[0], 'count':row[1]}
+                disease_counts[col+'_count'].append(count)
+        except Exception as e:
+            raise Exception("Error: {}".format(e.message))
+        return disease_counts 
+    else:
         con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
         query = """SELECT race, COUNT({1})::integer from {0}
                     WHERE {1} = 't'
-                    GROUP BY race;""".format(table_name,cleaned_disease)
+                    GROUP BY {2};""".format(table_name,col,category)
         
         result = execute_query(cur, query)
         
-        disease_counts = {disease+'_count':[]}
+        disease_counts = {'count':[]}
         for row in result:
-            count = {'race':row[0], 'count':row[1]}
-            disease_counts[disease+'_count'].append(count)
-    except Exception as e:
-        raise Exception("Error: {}".format(e.message))
-    return disease_counts       
+            count = {category:row[0], 'count':row[1]}
+            disease_counts['count'].append(count)
+        return counts       
 
 
-def disease_max_carrier_bene_ratio_by_state_sex(db_name, user_name, password, table_name1='cmspop', table_name2='cmsclaims', disease,state):
+def disease_max_carrier_bene_ratio_by_state_sex(disease, state, db_name='hs611db', user_name='ATW', password='', table_name1='cmspop', table_name2='cmsclaims'):
     """
     Calcualtes the maximum ratio of carrier_reimb/bene_resp and returns the id(s) 
     of the person with that ratio for those in a specified state and having
@@ -159,9 +174,9 @@ def disease_max_carrier_bene_ratio_by_state_sex(db_name, user_name, password, ta
         if state not in states:
              raise AssertionError("State '{0}' is not allowed".format(cleaned_state))
         if table_name1 != 'cmspop':
-            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+            raise AssertionError("Table '{0}' is not allowed please use cmspop".format(table_name1))
         if table_name2 != 'cmsclaims':
-            raise AssertionError("Table '{0}' is not allowed please use cmsclaims or a table with equivalent columns".format(table_name2))
+            raise AssertionError("Table '{0}' is not allowed please use cmsclaims".format(table_name2))
         con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
         query = """SELECT id, sex, state, MAX(carrier_bene_ratio)::float AS carrier_bene_ratio FROM 
                 (SELECT LHS.*, carrier_reimb::float/bene_resp::float AS carrier_bene_ratio FROM
@@ -194,7 +209,7 @@ def disease_max_carrier_bene_ratio_by_state_sex(db_name, user_name, password, ta
 
 
                         
-def carrier_reimb_avgs_select_state(db_name, user_name, password, table_name1='cmspop', table_name2='cmsclaims', state):
+def carrier_reimb_avgs_select_state(state, db_name='hs611db', user_name='ATW', password='', table_name1='cmspop', table_name2='cmsclaims'):
     """
     Calculate the state average of carrier reimbursement, hmo months, and beneificiary 
     responsibility for a specified state.
@@ -239,9 +254,9 @@ def carrier_reimb_avgs_select_state(db_name, user_name, password, table_name1='c
         if cleaned_state not in states:
             raise AssertionError("State '{0}' is not allowed".format(cleaned_state))
         if table_name1 != 'cmspop':
-            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+            raise AssertionError("Table '{0}' is not allowed please use cmspop".format(table_name1))
         if table_name2 != 'cmsclaims':
-            raise AssertionError("Table '{0}' is not allowed please use cmsclaims or a table with equivalent columns".format(table_name2))
+            raise AssertionError("Table '{0}' is not allowed please use cmsclaims".format(table_name2))
         con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
         query = """SELECT LHS.state,ROUND(AVG(RHS.carrier_reimb)::numeric,2)::float AS avg_carrier_reimb, 
                 ROUND(AVG(RHS.bene_resp)::numeric,2)::float AS avg_bene_resp, 
@@ -252,7 +267,7 @@ def carrier_reimb_avgs_select_state(db_name, user_name, password, table_name1='c
                 (SELECT * FROM {1}) AS RHS
                 ON LHS.id = RHS.id
                 WHERE state = {2}
-                GROUP BY LHS.state;""".format(table_name2,table_name2,"'"+cleaned_state+"'")
+                GROUP BY LHS.state;""".format(table_name1,table_name2,"'"+cleaned_state+"'")
         
         result = execute_query(cur, query)
         
@@ -265,7 +280,7 @@ def carrier_reimb_avgs_select_state(db_name, user_name, password, table_name1='c
         raise Exception("Error: {}".format(e.message))
     return claims_avgs
     
-def avg_death_age_for_concurrent_disease_by_sex(db_name, user_name, password, table_name='cmspop', disease1, disease2):
+def avg_death_age_for_concurrent_disease_by_sex(disease1, disease2, db_name='hs611db', user_name='ATW', password='', table_name='cmspop'):
     """
     Calculates the average age of death (by sex) for those who had at least
     the two specified diseases.
@@ -306,25 +321,25 @@ def avg_death_age_for_concurrent_disease_by_sex(db_name, user_name, password, ta
             raise AssertionError("Disease {0} is not allowed".format(cleaned_disease1))
         if cleaned_disease2 not in diseases:
             raise AssertionError("Disease {0} is not allowed".format(cleaned_disease2))
-        if table_name1 != 'cmspop':
-            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+        if table_name != 'cmspop':
+            raise AssertionError("Table '{0}' is not allowed please use cmspop".format(table_name))
         
         con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
         query = """SELECT sex, FLOOR(avg(age)::integer) AS avg_age_of_death 
                 FROM (SELECT sex, FLOOR((dod-dob)/365) AS age from {0} WHERE dod IS NOT NULL AND {1} ='t' AND {2} ='t') as sq1 
-                GROUP BY sex;""".format(TABLE_NAME,cleaned_disease1, cleaned_disease2)
+                GROUP BY sex;""".format(table_name,cleaned_disease1, cleaned_disease2)
         
         result = execute_query(cur, query)
         
         avg_death_ages = {'Average_age_of_death':[]}
         for row in result:
-            age = {'sex':row[0],'avg. age of death':row[1]}
+            age = {'sex':row[0],'avg_age_of_death':row[1]}
             avg_death_ages['Average_age_of_death'].append(age)
     except Exception as e:
         raise Exception("Error: {}".format(e.message))
     return avg_death_ages
     
-def high_and_low_carrier_reimb_state(db_name, user_name, password, table_name1='cmspop', table_name2='cmsclaims', race):
+def high_and_low_carrier_reimb_state(race, db_name='hs611db', user_name='ATW', password='', table_name1='cmspop', table_name2='cmsclaims'):
     """
     Get the states with the highest and lowest total carrier reimbursement 
     for a specified race.
@@ -364,9 +379,9 @@ def high_and_low_carrier_reimb_state(db_name, user_name, password, table_name1='
         if cleaned_race not in races:
             raise AssertionError("Race '{0}' is not allowed".format(cleaned_race))
         if table_name1 != 'cmspop':
-            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+            raise AssertionError("Table '{0}' is not allowed please use cmspop".format(table_name1))
         if table_name2 != 'cmsclaims':
-            raise AssertionError("Table '{0}' is not allowed please use cmsclaims or a table with equivalent columns".format(table_name2))
+            raise AssertionError("Table '{0}' is not allowed please use cmsclaims".format(table_name2))
         con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
         query = """SELECT state,race,total_carrier_reimb::float 
                 FROM( SELECT  LHS.state, LHS.race, SUM(RHS.carrier_reimb) AS total_carrier_reimb FROM
@@ -402,7 +417,7 @@ def high_and_low_carrier_reimb_state(db_name, user_name, password, table_name1='
     return total_carrier_reimb
 
 
-def max_total_cost_state_status(db_name, user_name, password, table_name1='cmspop', table_name2='cmsclaims', state, status):
+def max_total_cost_state_status(state, status, db_name='hs611db', user_name='ATW', password='', table_name1='cmspop', table_name2='cmsclaims'):
     """
     Get the id of the person of a specified status (alive or dead) with the 
     greatest total cost (carrier_reimb + bene_resp) in  a specified state. 
@@ -454,9 +469,9 @@ def max_total_cost_state_status(db_name, user_name, password, table_name1='cmspo
         if cleaned_status not in statuses:
             raise AssertionError("Race '{0}' is not allowed".format(cleaned_status))
         if table_name1 != 'cmspop':
-            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+            raise AssertionError("Table '{0}' is not allowed please use cmspop".format(table_name1))
         if table_name2 != 'cmsclaims':
-            raise AssertionError("Table '{0}' is not allowed please use cmsclaims or a table with equivalent columns".format(table_name2))    
+            raise AssertionError("Table '{0}' is not allowed please use cmsclaims".format(table_name2))    
         con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
         query = """SELECT id, state,status, total_cost 
                 FROM (SELECT LHS.id, LHS.state,RHS.carrier_reimb+RHS.bene_resp AS total_cost, LHS.status 
@@ -493,7 +508,7 @@ def max_total_cost_state_status(db_name, user_name, password, table_name1='cmspo
     return max_total_cost
     
     
-def hmo_mo_gt_average_for_state_disease(db_name, user_name, password, table_name1='cmspop', table_name2='cmsclaims', state, disease):
+def hmo_mo_gt_average_for_state_disease(state, disease, db_name='hs611db', user_name='ATW', password='', table_name1='cmspop', table_name2='cmsclaims'):
     """
     Returns the rows with hmo_mo values for those with a chosen disease greater 
     than the average hmo_mo value for that sample.
@@ -543,9 +558,9 @@ def hmo_mo_gt_average_for_state_disease(db_name, user_name, password, table_name
         if cleaned_disease not in diseases:
             raise AssertionError("Race '{0}' is not allowed".format(cleaned_disease))    
         if table_name1 != 'cmspop':
-            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+            raise AssertionError("Table '{0}' is not allowed please use cmspop".format(table_name1))
         if table_name2 != 'cmsclaims':
-            raise AssertionError("Table '{0}' is not allowed please use cmsclaims or a table with equivalent columns".format(table_name2))
+            raise AssertionError("Table '{0}' is not allowed please use cmsclaims".format(table_name2))
         con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
         query = """SELECT id, state, {3},hmo_mo 
                 FROM (SELECT LHS.id,state,{3},hmo_mo  
@@ -571,7 +586,7 @@ def hmo_mo_gt_average_for_state_disease(db_name, user_name, password, table_name
         raise Exception("Error: {}".format(e.message))
     return gt_average  
     
-def state_avg_life_expectancies_by_sex(db_name, user_name, password, table_name='cmspop', state): 
+def state_avg_life_expectancies_by_sex(state, db_name='hs611db', user_name='ATW', password='', table_name='cmspop'): 
     """
     Returns the average life expectancies for each sex for a chosen state for 
     people with none of the diseases (healthy) compared to those with one of the four
@@ -620,8 +635,8 @@ def state_avg_life_expectancies_by_sex(db_name, user_name, password, table_name=
     try:
         if cleaned_state not in states:
             raise AssertionError("State '{0}' is not allowed".format(cleaned_state)) 
-        if table_name1 != 'cmspop':
-            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+        if table_name != 'cmspop':
+            raise AssertionError("Table '{0}' is not allowed please use cmspop".format(table_name1))
     
         con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
         query = """SELECT LHS4.state, LHS4.sex, avg_healthy_life_expectancy, avg_alzheimers_life_expectancy, avg_hf_life_expectancy, avg_depression_life_expectancy, avg_cancer_life_expectancy FROM 
@@ -662,7 +677,7 @@ def state_avg_life_expectancies_by_sex(db_name, user_name, password, table_name=
         raise Exception("Error: {}".format(e.message))
     return life_expectancies  
 
-def claims_deviations_by_state(db_name, user_name, password, table_name1='cmspop', table_name2='cmsclaims', state): 
+def claims_deviations_by_state(state, db_name='hs611db', user_name='ATW', password='', table_name1='cmspop', table_name2='cmsclaims'): 
     """
     Get the deviations from (the mean of) carrier_reimnb, bene_resp, and
     hmo_mo in the specified state.
@@ -697,7 +712,6 @@ def claims_deviations_by_state(db_name, user_name, password, table_name1='cmspop
         'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 
         'NH', 'NJ', 'NM', 'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 
         'VA', 'VT', 'WA', 'WI', 'WV', 'WY', 'Othr')
-    TABLE_NAME_1 = "cmspop"
     # Strip the user input to alpha characters only
     if state == 'Othr':
         cleaned_state = 'Othr'
@@ -708,7 +722,7 @@ def claims_deviations_by_state(db_name, user_name, password, table_name1='cmspop
         if cleaned_state not in states:
             raise AssertionError("Race '{0}' is not allowed".format(cleaned_state))   
         if table_name1 != 'cmspop':
-            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+            raise AssertionError("Table '{0}' is not allowed please use cmspop".format(table_name1))
         
         con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
         query = """SELECT id, state, ROUND(carrier_reimb-(SELECT AVG(carrier_reimb) as avg_carrier FROM (SELECT LHS.id,LHS.state,RHS.carrier_reimb,RHS.bene_resp,RHS.hmo_mo FROM
@@ -745,7 +759,7 @@ def claims_deviations_by_state(db_name, user_name, password, table_name1='cmspop
         raise Exception("Error: {}".format(e.message))
     return deviations
 
-def stat_select_for_sex(db_name, user_name, password, table_name1='cmspop', table_name2='cmsclaims', stat, sex):
+def stat_select_for_sex(stat, sex,db_name='hs611db', user_name='ATW', password='', table_name1='cmspop', table_name2='cmsclaims'):
     """
     Calculates/returns the selected statistcal measure of age, carrier_reimnb, 
     bene_resp, and hmo_mo for a specified sex.
@@ -790,9 +804,9 @@ def stat_select_for_sex(db_name, user_name, password, table_name1='cmspop', tabl
         if cleaned_sex not in sexes:
             raise AssertionError("Sex '{0}' is not allowed".format(cleaned_sex)) 
         if table_name1 != 'cmspop':
-            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+            raise AssertionError("Table '{0}' is not allowed please use cmspop".format(table_name1))
         if table_name2 != 'cmsclaims':
-            raise AssertionError("Table '{0}' is not allowed please use cmsclaims or a table with equivalent columns".format(table_name2))
+            raise AssertionError("Table '{0}' is not allowed please use cmsclaims".format(table_name2))
             
         con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
         
