@@ -2,7 +2,6 @@
 import re
 import psycopg2
 from psycopg2 import extras
-import json
 from exceptions import Exception, AssertionError
 
 def cursor_connect(db_name, user_name, password, cursor_factory=None):
