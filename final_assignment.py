@@ -296,3 +296,78 @@ def avg_death_age_for_concurrent_disease_by_sex(db_name, user_name, password, ta
     except Exception as e:
         raise Exception("Error: {}".format(e.message))
     return avg_death_ages
+    
+def high_and_low_carrier_reimb_state(db_name, user_name, password, table_name1='cmspop', table_name2='cmsclaims', race):
+    """
+    Get the states with the highest and lowest total carrier reimbursement 
+    for a specified race.
+
+    Parameters
+    ----------
+    db_name: str
+        name of database being accessed
+    user_name: str
+        username used to access the specfied database
+    password: str
+        password corresponding to user_name
+    table_name: str
+        table of interest found within db_name
+    race : str, 2unicode
+        race of persons of interest
+
+    Returns
+    -------
+    max_min
+        A labeled JSON object with the state, race and total carrier 
+        reimbursement.
+
+    Examples
+    --------
+    /api/v1/freq/depression
+    /api/v1/freq/diabetes
+    """
+    
+    races = ('white','black','hispanic','others')
+    
+    # Strip the user input to alpha characters only
+    cleaned_race = re.sub('\W+', '', race)
+    try:
+        if cleaned_race not in races:
+            raise AssertionError("Race '{0}' is not allowed".format(cleaned_race))
+        if table_name1 != 'cmspop':
+            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+        if table_name2 != 'cmsclaims':
+            raise AssertionError("Table '{0}' is not allowed please use cmsclaims or a table with equivalent columns".format(table_name2))
+        con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
+        query = """SELECT state,race,total_carrier_reimb::float 
+                FROM( SELECT  LHS.state, LHS.race, SUM(RHS.carrier_reimb) AS total_carrier_reimb FROM
+                (SELECT * FROM {1}) AS RHS
+                LEFT JOIN
+                (SELECT * FROM {0}) AS LHS
+                ON LHS.id = RHS.id WHERE race = {2}
+                GROUP BY LHS.state,LHS.race) AS sq1
+                WHERE total_carrier_reimb = (SELECT MIN(total_carrier_reimb)::float 
+                FROM (SELECT SUM(LHS.carrier_reimb) AS total_carrier_reimb, RHS.state, RHS.race FROM
+                (SELECT * FROM {1}) AS LHS
+                LEFT JOIN
+                (SELECT * FROM {0}) AS RHS
+                ON LHS.id = RHS.id WHERE race = {2}
+                GROUP BY RHS.state, RHS.race) AS sq2
+                ) OR total_carrier_reimb = (SELECT MAX(total_carrier_reimb)::float 
+                FROM (SELECT SUM(LHS.carrier_reimb) AS total_carrier_reimb, RHS.state, RHS.race FROM
+                (SELECT * FROM {1}) AS LHS
+                LEFT JOIN
+                (SELECT * FROM {0}) AS RHS
+                ON LHS.id = RHS.id WHERE race = {2}
+                GROUP BY RHS.state, RHS.race) AS sq3)
+                ORDER by total_carrier_reimb ASC;""".format(table_name1,table_name2,"'"+cleaned_race+"'")
+        
+        result = execute_query(cur, query)
+        
+        total_carrier_reimb = {'Total_Carrier_Reimbursements':[]}
+        for row in result:
+            min_max = {'state':row[0], 'race':row[1],'carrier_reimb':row[2]}
+            total_carrier_reimb['Total_Carrier_Reimbursements'].append(min_max)
+    except Exception as e:
+        raise Exception("Error: {}".format(e.message))
+    return total_carrier_reimb
