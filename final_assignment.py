@@ -237,3 +237,62 @@ def carrier_reimb_avgs_select_state(db_name, user_name, password, table_name='cm
     except Exception as e:
         raise Exception("Error: {}".format(e.message))
     return claims_avgs
+    
+def avg_death_age_for_concurrent_disease_by_sex(db_name, user_name, password, table_name='cmspop', disease1, disease2):
+    """
+    Calculates the average age of death (by sex) for those who had at least
+    the two specified diseases.
+    
+    Parameters
+    ----------
+    db_name: str
+        name of database being accessed
+    user_name: str
+        username used to access the specfied database
+    password: str
+        password corresponding to user_name
+    table_name: str
+        table of interest found within db_name
+    disease1 : str, unicode
+        disease type
+    disease2 : str, unicode
+        disease type
+        
+    Returns
+    -------
+    json
+        A labeled JSON object with the race and average age of death of those 
+        with both diseases.
+
+    Examples
+    --------
+    /api/v1/freq/depression
+    /api/v1/freq/diabetes
+    """
+    
+    diseases = ('heart_fail','alz_rel_sen','depression','cancer')
+    # Strip the user input to alpha characters only
+    cleaned_disease1 = re.sub('\W+', '', disease1)
+    cleaned_disease2 = re.sub('\W+', '', disease1)
+    try:
+        if cleaned_disease1 not in diseases:
+            raise AssertionError("Disease {0} is not allowed".format(cleaned_disease1))
+        if cleaned_disease2 not in diseases:
+            raise AssertionError("Disease {0} is not allowed".format(cleaned_disease2))
+        if table_name1 != 'cmspop':
+            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+        
+        con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
+        query = """SELECT sex, FLOOR(avg(age)::integer) AS avg_age_of_death 
+                FROM (SELECT sex, FLOOR((dod-dob)/365) AS age from {0} WHERE dod IS NOT NULL AND {1} ='t' AND {2} ='t') as sq1 
+                GROUP BY sex;""".format(TABLE_NAME,cleaned_disease1, cleaned_disease2)
+        
+        result = execute_query(cur, query)
+        
+        avg_death_ages = {'Average_age_of_death':[]}
+        for row in result:
+            age = {'sex':row[0],'avg. age of death':row[1]}
+            avg_death_ages['Average_age_of_death'].append(age)
+    except Exception as e:
+        raise Exception("Error: {}".format(e.message))
+    return avg_death_ages
