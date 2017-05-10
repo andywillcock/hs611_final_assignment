@@ -371,3 +371,94 @@ def high_and_low_carrier_reimb_state(db_name, user_name, password, table_name1='
     except Exception as e:
         raise Exception("Error: {}".format(e.message))
     return total_carrier_reimb
+
+
+def max_total_cost_state_status(db_name, user_name, password, table_name1='cmspop', table_name2='cmsclaims', state, status):
+    """
+    Get the id of the person of a specified status (alive or dead) with the 
+    greatest total cost (carrier_reimb + bene_resp) in  a specified state. 
+
+
+    Parameters
+    ----------
+    db_name: str
+        name of database being accessed
+    user_name: str
+        username used to access the specfied database
+    password: str
+        password corresponding to user_name
+    table_name1: str
+        table of interest found within db_name
+    table_name2: str
+        table of interest found within db_name 
+    state : str, 2unicode
+        state if interest
+    status : str, 2unicode
+        person's alive or dead status
+
+    Returns
+    -------
+    max_total_cost
+        A labeled JSON object with the id, state, status, and total cost
+
+    Examples
+    --------
+    /api/v1/freq/depression
+    /api/v1/freq/diabetes
+    """
+    states = ('AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'HI', 'IA', 'ID', 'IL', 
+        'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 
+        'NH', 'NJ', 'NM', 'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 
+        'VA', 'VT', 'WA', 'WI', 'WV', 'WY', 'Othr')
+    statuses = ('alive','dead')
+    
+    # Strip the user input to alpha characters only
+    cleaned_status = re.sub('\W+', '', status)
+    if state == 'Othr':
+        cleaned_state = 'Othr'
+    else:
+        cleaned_state = re.sub('\W+', '', state)
+        cleaned_state = cleaned_state.upper()
+    try:
+        if cleaned_state not in states:
+            raise AssertionError("Race '{0}' is not allowed".format(cleaned_state))
+        if cleaned_status not in statuses:
+            raise AssertionError("Race '{0}' is not allowed".format(cleaned_status))
+        if table_name1 != 'cmspop':
+            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+        if table_name2 != 'cmsclaims':
+            raise AssertionError("Table '{0}' is not allowed please use cmsclaims or a table with equivalent columns".format(table_name2))    
+        con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
+        query = """SELECT id, state,status, total_cost 
+                FROM (SELECT LHS.id, LHS.state,RHS.carrier_reimb+RHS.bene_resp AS total_cost, LHS.status 
+                FROM (SELECT id,state,status 
+                FROM (SELECT *,CASE 
+                WHEN dod IS NOT NULL THEN 'dead'
+                WHEN dod IS NULL THEN 'alive'
+                END AS status
+                FROM {0}) as sq1) AS LHS
+                LEFT JOIN
+                (SELECT * from {1}) AS RHS
+                ON LHS.id = RHS.id WHERE state = {2} AND status = '{3}') as sq2 
+                WHERE total_cost = (SELECT max(total_cost) 
+                FROM (SELECT LHS.id, LHS.state,RHS.carrier_reimb+RHS.bene_resp AS total_cost, LHS.status 
+                FROM (SELECT id,state,status 
+                FROM (SELECT *,CASE 
+                WHEN dod IS NOT NULL THEN 'dead'
+                WHEN dod IS NULL THEN 'alive'
+                END AS status
+                FROM {0}) as sq1) AS LHS
+                LEFT JOIN
+                (SELECT * from {1}) AS RHS
+                ON LHS.id = RHS.id WHERE state = {2} and status = '{3}') as sq2)  ;""".format(table_name1,table_name2,"'"+cleaned_state+"'",cleaned_status)
+        
+        result = execute_query(cur, query)
+        
+        max_total_cost = {'Max_Total_Cost':[]}
+        #df = pd.DataFrame(cur.fetchall(), columns=colnames)
+        for row in result:
+            cost = {'id':row[0], 'state':row[1], 'status':row[2],'total_cost':row[3]}
+            max_total_cost['Max_Total_Cost'].append(cost)
+    except Exception as e:
+        raise Exception("Error: {}".format(e.message))
+    return max_total_cost
