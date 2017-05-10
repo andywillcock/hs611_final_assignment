@@ -715,3 +715,203 @@ def claims_deviations_by_state(db_name, user_name, password, table_name1='cmspop
     except Exception as e:
         raise Exception("Error: {}".format(e.message))
     return deviations
+
+def stat_select_for_sex(db_name, user_name, password, table_name1='cmspop', table_name2='cmsclaims', stat, sex):
+    """
+    Calculates/returns the selected statistcal measure of age, carrier_reimnb, 
+    bene_resp, and hmo_mo for a specified sex.
+
+    Parameters
+    ----------
+    db_name: str
+        name of database being accessed
+    user_name: str
+        username used to access the specfied database
+    password: str
+        password corresponding to user_name
+    table_name1: str
+        table of interest found within db_name
+    table_name2: str
+        table of interest found within db_name 
+    stat : str, 2unicode
+        statistical measurement of interest
+    sex: str. 2unicode
+        sex for the statistic to be calculated for
+
+    Returns
+    -------
+    stat_dict
+        A labeled JSON object with the sex and specified statistic for age,
+        carrier_reimb, bene_resp, and hmo_mo.
+
+    Examples
+    --------
+    /api/v1/freq/depression
+    /api/v1/freq/diabetes
+    """
+    stats = ('mean','median','sd')
+    sexes = ('male','female')
+    
+    # Strip the user input to alpha characters only
+    cleaned_stat = re.sub('\W+', '', stat)
+    cleaned_sex = re.sub('\W+', '', sex)
+    try:
+        if cleaned_stat not in stats:
+            raise AssertionError("Statistic '{0}' is not allowed".format(cleaned_stat)) 
+        if cleaned_sex not in sexes:
+            raise AssertionError("Sex '{0}' is not allowed".format(cleaned_sex)) 
+        if table_name1 != 'cmspop':
+            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+        if table_name2 != 'cmsclaims':
+            raise AssertionError("Table '{0}' is not allowed please use cmsclaims or a table with equivalent columns".format(table_name2))
+            
+        con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
+        
+        if stat == 'mean':
+            query = """ SELECT sex, FLOOR(avg(age)) AS age, ROUND(avg(carrier_reimb)::numeric,2)::float AS avg_carrier_resp, ROUND(avg(bene_resp)::numeric,2)::float AS avg_bene_resp, ROUND(avg(hmo_mo)::numeric,2)::float AS avg_hmo_mo FROM (SELECT LHS.id,LHS.sex,LHS.state,FLOOR((LHS.dod-dob)/365) AS age, RHS.carrier_reimb,RHS.bene_resp,RHS.hmo_mo FROM
+                    (SELECT * FROM {0} WHERE dod IS NOT NULL) AS LHS
+                    LEFT JOIN
+                    (SELECT * FROM {1}) AS RHS
+                    ON LHS.id=RHS.id WHERE sex = {2}) AS tbl1
+                    GROUP by sex;""".format(table_name1,table_name2, "'"+cleaned_sex+"'")
+        if stat == 'median':
+                query = """SELECT sex, FLOOR(median_age)::float AS median_age,ROUND(median_carrier_reimb,2)::float AS median_carrier_reimb, ROUND(median_bene_resp,2)::float AS median_bene_resp,ROUND(median_hmo_mo,2)::float AS median_hmo_mo  FROM (
+                    (WITH med_age AS (SELECT age, row_number() OVER (ORDER BY age) AS row_id,
+                    (SELECT COUNT(1) FROM (SELECT *, (dod-dob)/365 AS age FROM {0} WHERE dod IS NOT NULL) AS LHS
+                    LEFT JOIN
+                    (SELECT * FROM {1}) AS RHS
+                    ON LHS.id=RHS.id WHERE  sex =  {2}) AS ct
+                    FROM
+                    (SELECT *, (dod-dob)/365 AS AGE FROM {0} WHERE dod IS NOT NULL) AS LHS
+                    LEFT JOIN
+                    (SELECT * FROM {1}) AS RHS
+                        ON LHS.id=RHS.id WHERE  sex =  {2})
+                    SELECT AVG(age) AS median_age
+                    FROM med_age
+                    WHERE row_id BETWEEN ct/2.0 AND ct/2.0 + 1) AS t0
+                    
+                    CROSS JOIN
+                    
+                    (WITH med_carrier_reimb AS (SELECT carrier_reimb, row_number() OVER (ORDER BY carrier_reimb) AS row_id,
+                            (SELECT count(1) FROM (SELECT * FROM {0} WHERE dod IS NOT NULL) AS LHS
+                    LEFT JOIN
+                    (SELECT * FROM {1}) AS RHS
+                    ON LHS.id=RHS.id WHERE  sex =  {2}) AS ct
+                    FROM 
+                    (SELECT * FROM {0} WHERE dod IS NOT NULL) AS LHS
+                    LEFT JOIN
+                    (SELECT * FROM {1}) AS RHS
+                    ON LHS.id=RHS.id WHERE sex =  {2})
+                    SELECT avg(carrier_reimb) AS median_carrier_reimb
+                    FROM med_carrier_reimb
+                    WHERE row_id BETWEEN ct/2.0 AND ct/2.0 + 1) AS t1
+                    
+                    CROSS JOIN
+                    
+                    (WITH med_bene_resp AS (SELECT bene_resp, row_number() OVER (ORDER BY bene_resp) AS row_id,
+                    (SELECT count(1) FROM (SELECT * FROM {0} WHERE dod IS NOT NULL) AS LHS
+                    LEFT JOIN
+                    (SELECT * FROM {1}) AS RHS
+                    ON LHS.id=RHS.id WHERE  sex =  {2}) AS ct
+                    FROM 
+                    (SELECT * FROM {0} WHERE dod IS NOT NULL) AS LHS
+                    LEFT JOIN
+                    (SELECT * FROM {1}) AS RHS
+                    ON LHS.id=RHS.id WHERE  sex =  {2})
+                    select avg(bene_resp) AS median_bene_resp
+                    FROM med_bene_resp
+                    WHERE row_id between ct/2.0 and ct/2.0 + 1) AS t2
+                    
+                    CROSS JOIN
+                    
+                    (WITH med_hmo_mo AS (SELECT sex, hmo_mo, row_number() OVER (ORDER BY hmo_mo) AS row_id,
+                    (SELECT count(1) FROM (SELECT * FROM {0} WHERE dod IS NOT NULL) AS LHS
+                    LEFT JOIN
+                    (SELECT * FROM {1}) AS RHS
+                    ON LHS.id=RHS.id WHERE  sex =  {2}) AS ct
+                    FROM 
+                    (SELECT * FROM {0} WHERE dod IS NOT NULL) AS LHS
+                    LEFT JOIN
+                    (SELECT * FROM {1}) AS RHS
+                    ON LHS.id=RHS.id WHERE  sex =  {2})
+                    SELECT  sex, avg(hmo_mo) AS median_hmo_mo
+                    FROM med_hmo_mo
+                    WHERE row_id BETWEEN ct/2.0 AND ct/2.0 + 1
+                    GROUP BY sex) AS t3) AS meds;
+                    """.format(table_name1,table_name2,"'"+cleaned_sex+"'")
+        if stat == 'sd':
+            query = """SELECT * FROM
+                (SELECT sex, ROUND(SQRT(SUM(ROUND(age-(SELECT AVG(age) AS avg_age FROM (SELECT LHS.id,LHS.sex,LHS.age,RHS.carrier_reimb,RHS.bene_resp,RHS.hmo_mo FROM
+                (SELECT *, (dod-dob)/365 AS age FROM {0} WHERE dod IS NOT NULL) AS LHS
+                LEFT JOIN
+                (SELECT * FROM {1}) AS RHS
+                ON LHS.id=RHS.id) AS sq1 
+                WHERE sex = {2})::numeric,2)::float^2)/COUNT(sex))::numeric,2)::float AS age_sd FROM 
+		(SELECT LHS.id,LHS.sex,LHS.age,RHS.carrier_reimb,RHS.bene_resp,RHS.hmo_mo FROM
+                (SELECT *, (dod-dob)/365 AS age FROM {0} WHERE dod IS NOT NULL) AS LHS
+                LEFT JOIN
+                (SELECT * FROM {1}) AS RHS
+                ON LHS.id=RHS.id) AS sq4
+		WHERE sex = {2} GROUP BY sex) AS t0
+		
+                CROSS JOIN 
+                
+                (SELECT ROUND(SQRT(SUM(ROUND(carrier_reimb-(SELECT AVG(carrier_reimb) AS avg_carrier FROM (SELECT LHS.id,LHS.sex,RHS.carrier_reimb,RHS.bene_resp,RHS.hmo_mo FROM
+                (SELECT * FROM {0}) AS LHS
+                LEFT JOIN
+                (SELECT * FROM {1}) AS RHS
+                ON LHS.id=RHS.id) AS sq1 
+                WHERE sex = {2})::numeric,2)::float^2)/COUNT(sex))::numeric,2)::float AS carrier_sd FROM (SELECT LHS.id,LHS.sex,RHS.carrier_reimb,RHS.bene_resp,RHS.hmo_mo FROM
+                (SELECT * FROM {0}) AS LHS
+                LEFT JOIN
+                (SELECT * FROM {1}) AS RHS
+                ON LHS.id=RHS.id) AS sq4
+		WHERE sex = {2} GROUP BY sex) AS t1
+		
+                CROSS JOIN 
+                
+                (SELECT ROUND(SQRT(SUM(ROUND(bene_resp-(SELECT AVG(bene_resp) AS avg_bene FROM (SELECT LHS.id,LHS.sex,RHS.carrier_reimb,RHS.bene_resp,RHS.hmo_mo FROM
+                (SELECT * FROM {0}) AS LHS
+                LEFT JOIN
+                (SELECT * FROM {1}) AS RHS
+                ON LHS.id=RHS.id) AS sq1 
+                WHERE sex = {2})::numeric,2)::float^2)/COUNT(sex))::numeric,2)::float AS bene_sd FROM (SELECT LHS.id,LHS.sex,RHS.carrier_reimb,RHS.bene_resp,RHS.hmo_mo FROM
+                (SELECT * FROM {0}) AS LHS
+                LEFT JOIN
+                (SELECT * FROM {1}) AS RHS
+                ON LHS.id=RHS.id) AS sq4
+		 WHERE sex = {2} GROUP BY sex) AS t2
+		 
+                CROSS JOIN 
+                
+                (SELECT ROUND(SQRT(SUM(ROUND(bene_resp-(SELECT AVG(hmo_mo) AS avg_bene FROM (SELECT LHS.id,LHS.sex,RHS.carrier_reimb,RHS.bene_resp,RHS.hmo_mo FROM
+                (SELECT * FROM cmspop) AS LHS
+                LEFT JOIN
+                (SELECT * FROM {1}) AS RHS
+                ON LHS.id=RHS.id) AS sq1 
+                WHERE sex = {2})::numeric,2)::float^2)/COUNT(sex))::numeric,2)::float AS hmo_mo_sd FROM (SELECT LHS.id,LHS.sex,RHS.carrier_reimb,RHS.bene_resp,RHS.hmo_mo FROM
+                (SELECT * FROM cmspop) AS LHS
+                LEFT JOIN
+                (SELECT * FROM {1}) AS RHS
+                ON LHS.id=RHS.id) AS sq4
+		 WHERE sex = {2} GROUP BY sex) AS t3;""".format(table_name1,table_name2,"'"+cleaned_sex+"'")
+        
+        result = execute_query(cur, query)
+        
+        stat_dict = {'statistic':[]}
+        #df = pd.DataFrame(cur.fetchall(), columns=colnames)
+        if stat == 'mean':
+            for row in result:
+                statistic = {'sex':row[0], 'age':row[1], 'mean_carrier_reimb':row[2],'mean_bene_resp':row[3],'mean_homo_mo devations':row[4]}
+                stat_dict['statistic'].append(statistic)
+        if stat == 'median':
+            for row in result:
+                statistic = {'sex':row[0], 'age':row[1], 'median_carrier_reimb':row[2],'median_bene_resp':row[3],'median_homo_mo devations':row[4]}
+                stat_dict['statistic'].append(statistic)
+        if stat == 'sd':
+            for row in result:
+                statistic = {'sex':row[0], 'age':row[1], 'carrier_reimb_sd':row[2],'bene_resp_sd':row[3],'homo_mo_sd':row[4]}
+                stat_dict['statistic'].append(statistic)        
+    except Exception as e:
+        raise Exception("Error: {}".format(e.message))
+    return stat_dict
