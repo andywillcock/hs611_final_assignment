@@ -60,6 +60,11 @@ def disease_count_by_race(col, db_name='hs611db', user_name='ATW', password='', 
 
     Parameters
     ----------
+    col : str
+        Boolean variable (Disease of interest for cmspop)
+    category: str
+        Categorical variable to separate counts by
+        Default is race for cmspop table 
     db_name: str
         name of database being accessed
     user_name: str
@@ -68,11 +73,7 @@ def disease_count_by_race(col, db_name='hs611db', user_name='ATW', password='', 
         password corresponding to user_name
     table_name: str
         cmspop or table with identical column names
-    col : str
-        Boolean variable (Disease of interest for cmspop)
-    category: str
-        Categorical variable to separate counts by
-        Default is race for cmspop table 
+    
 
     Returns
     -------
@@ -114,10 +115,10 @@ def disease_count_by_race(col, db_name='hs611db', user_name='ATW', password='', 
         
         result = execute_query(cur, query)
         
-        disease_counts = {'count':[]}
+        counts = {'count':[]}
         for row in result:
             count = {category:row[0], 'count':row[1]}
-            disease_counts['count'].append(count)
+            counts['count'].append(count)
         return counts       
 
 
@@ -129,6 +130,8 @@ def disease_max_carrier_bene_ratio_by_state_sex(disease, state, db_name='hs611db
 
     Parameters
     ----------
+    state : str
+        State abbreviation
     db_name: str
         name of database being accessed
     user_name: str
@@ -139,8 +142,7 @@ def disease_max_carrier_bene_ratio_by_state_sex(disease, state, db_name='hs611db
         cmspop or table with identical column names
     table_name2: str
         cmsclaims or table with identical column names
-    state : str
-        State abbreviation
+    
 
     Returns
     -------
@@ -216,6 +218,8 @@ def carrier_reimb_avgs_select_state(state, db_name='hs611db', user_name='ATW', p
 
     Parameters
     ----------
+    state : str
+        State abbreviation
     db_name: str
         name of database being accessed
     user_name: str
@@ -226,8 +230,7 @@ def carrier_reimb_avgs_select_state(state, db_name='hs611db', user_name='ATW', p
         cmspop or table with identical column names
     table_name2: str
         cmsclaims or table with identical column names
-    state : str
-        State abbreviation
+    
 
     Returns
     -------
@@ -287,6 +290,10 @@ def avg_death_age_for_concurrent_disease_by_sex(disease1, disease2, db_name='hs6
     
     Parameters
     ----------
+    disease1 : str
+        disease type
+    disease2 : str
+        disease type
     db_name: str
         name of database being accessed
     user_name: str
@@ -295,10 +302,7 @@ def avg_death_age_for_concurrent_disease_by_sex(disease1, disease2, db_name='hs6
         password corresponding to user_name
     table_name1: str
         cmspop or table with identical column names
-    disease1 : str
-        disease type
-    disease2 : str
-        disease type
+    
         
     Returns
     -------
@@ -346,6 +350,8 @@ def high_and_low_carrier_reimb_state(race, db_name='hs611db', user_name='ATW', p
 
     Parameters
     ----------
+    race : str
+        race of persons of interest
     db_name: str
         name of database being accessed
     user_name: str
@@ -356,8 +362,7 @@ def high_and_low_carrier_reimb_state(race, db_name='hs611db', user_name='ATW', p
         cmspop or table with identical column names
     table_name2: str
         cmsclaims or table with identical column names
-    race : str
-        race of persons of interest
+    
 
     Returns
     -------
@@ -425,6 +430,10 @@ def max_total_cost_state_status(state, status, db_name='hs611db', user_name='ATW
 
     Parameters
     ----------
+    state : str
+        state if interest
+    status : str
+        person's alive or dead status
     db_name: str
         name of database being accessed
     user_name: str
@@ -435,10 +444,7 @@ def max_total_cost_state_status(state, status, db_name='hs611db', user_name='ATW
         cmspop or table with identical column names
     table_name2: str
         cmsclaims or table with identical column names
-    state : str
-        state if interest
-    status : str
-        person's alive or dead status
+   
 
     Returns
     -------
@@ -515,6 +521,10 @@ def hmo_mo_gt_average_for_state_disease(state, disease, db_name='hs611db', user_
 
     Parameters
     ----------
+    state : str
+        state of interest
+    disease : str
+        disease of interest
     db_name: str
         name of database being accessed
     user_name: str
@@ -525,10 +535,7 @@ def hmo_mo_gt_average_for_state_disease(state, disease, db_name='hs611db', user_
         cmspop or table with identical column names
     table_name2: str
         cmsclaims or table with identical column names
-    state : str
-        state of interest
-    disease : str
-        disease of interest
+    
 
     Returns
     -------
@@ -595,17 +602,17 @@ def state_avg_life_expectancies_by_sex(state, db_name='hs611db', user_name='ATW'
 
     Parameters
     ----------
+    state : str
+        state if interest
     db_name: str
         name of database being accessed
     user_name: str
         username used to access the specfied database
     password: str
         password corresponding to user_name
-    table_name1: str
+    table_name: str
         cmspop or table with identical column names
-    state : str
-        state if interest
-
+    
     Returns
     -------
     life_expectancies
@@ -684,6 +691,8 @@ def claims_deviations_by_state(state, db_name='hs611db', user_name='ATW', passwo
 
     Parameters
     ----------
+    state : str
+        state of interest
     db_name: str
         name of database being accessed
     user_name: str
@@ -694,8 +703,7 @@ def claims_deviations_by_state(state, db_name='hs611db', user_name='ATW', passwo
         cmspop or table with identical column names
     table_name2: str
         cmsclaims or table with identical column names
-    state : str
-        state if interest
+    
 
     Returns
     -------
@@ -766,6 +774,10 @@ def stat_select_for_sex(stat, sex,db_name='hs611db', user_name='ATW', password='
 
     Parameters
     ----------
+    stat : str
+        statistical measurement of interest
+    sex: str
+        sex for the statistic to be calculated for
     db_name: str
         name of database being accessed
     user_name: str
@@ -776,10 +788,7 @@ def stat_select_for_sex(stat, sex,db_name='hs611db', user_name='ATW', password='
         cmspop or table with identical column names
     table_name2: str
         cmsclaims or table with identical column names
-    stat : str
-        statistical measurement of interest
-    sex: str
-        sex for the statistic to be calculated for
+    
 
     Returns
     -------
