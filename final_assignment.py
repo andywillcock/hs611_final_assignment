@@ -53,4 +53,30 @@ def execute_query(cursor,query):
     """
     cursor.execute(query)
     result = cursor.fetchall()
-    return result        
+    return result
+    
+def disease_count_by_race(db_name, user_name, password, table_name='cmspop', disease):   
+    
+    diseases = ('heart_fail','alz_rel_sen','depression','cancer')
+    table_names = ('cmspop')
+    # Strip the user input to alpha characters only
+    cleaned_disease = re.sub('\W+', '', disease)
+    try:
+        if disease not in diseases:
+            raise AssertionError("Disease '{0}' is not allowed".format(cleaned_disease))
+        if table_name not in table_names:
+            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name))
+        con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
+        query = """SELECT race, COUNT({1})::integer from {0}
+                    WHERE {1} = 't'
+                    GROUP BY race;""".format(table_name,cleaned_disease)
+        
+        result = execute_query(cur, query)
+        
+        disease_counts = {disease+'_count':[]}
+        for row in result:
+            count = {'race':row[0], 'count':row[1]}
+            disease_counts[disease+'_count'].append(count)
+    except Exception as e:
+        raise Exception("Error: {}".format(e.message))
+    return disease_counts       
