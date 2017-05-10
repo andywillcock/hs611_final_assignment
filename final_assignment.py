@@ -633,3 +633,85 @@ def state_avg_life_expectancies_by_sex(db_name, user_name, password, table_name=
         raise Exception("Error: {}".format(e.message))
     return life_expectancies  
 
+def claims_deviations_by_state(db_name, user_name, password, table_name1='cmspop', table_name2='cmsclaims', state): 
+    """
+    Get the deviations from (the mean of) carrier_reimnb, bene_resp, and
+    hmo_mo in the specified state.
+
+    Parameters
+    ----------
+    db_name: str
+        name of database being accessed
+    user_name: str
+        username used to access the specfied database
+    password: str
+        password corresponding to user_name
+    table_name1: str
+        table of interest found within db_name
+    table_name2: str
+        table of interest found within db_name 
+    state : str, 2unicode
+        state if interest
+
+    Returns
+    -------
+    deviations
+        A labeled JSON object with the id, state, deviation from carrier_reimb
+        mean, deviation from bene_resp mean, and deviation from hmo_mo mean.
+
+    Examples
+    --------
+    /api/v1/freq/depression
+    /api/v1/freq/diabetes
+    """
+    states = ('AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'HI', 'IA', 'ID', 'IL', 
+        'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 
+        'NH', 'NJ', 'NM', 'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 
+        'VA', 'VT', 'WA', 'WI', 'WV', 'WY', 'Othr')
+    TABLE_NAME_1 = "cmspop"
+    # Strip the user input to alpha characters only
+    if state == 'Othr':
+        cleaned_state = 'Othr'
+    else:
+        cleaned_state = re.sub('\W+', '', state)
+        cleaned_state = cleaned_state.upper()
+    try:
+        if cleaned_state not in states:
+            raise AssertionError("Race '{0}' is not allowed".format(cleaned_state))   
+        if table_name1 != 'cmspop':
+            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+        
+        con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
+        query = """SELECT id, state, ROUND(carrier_reimb-(SELECT AVG(carrier_reimb) as avg_carrier FROM (SELECT LHS.id,LHS.state,RHS.carrier_reimb,RHS.bene_resp,RHS.hmo_mo FROM
+                (SELECT * from {0}) AS LHS
+                LEFT JOIN
+                (SELECT * FROM {1}) AS RHS
+                ON LHS.id=RHS.id) AS sq1 
+                WHERE state = {2})::numeric,2)::float AS carrier_deviation, ROUND(bene_resp-(SELECT AVG(bene_resp) as avg_bene FROM (SELECT LHS.id,LHS.state,RHS.carrier_reimb,RHS.bene_resp,RHS.hmo_mo FROM
+                (SELECT * from {0}) AS LHS
+                LEFT JOIN
+                (SELECT * FROM {1}) AS RHS
+                ON LHS.id=RHS.id) AS sq2
+                WHERE state = {2})::numeric,2)::float AS bene_deviation, ROUND(hmo_mo-(SELECT AVG(hmo_mo) as avg_hmo FROM (SELECT LHS.id,LHS.state,RHS.carrier_reimb,RHS.bene_resp,RHS.hmo_mo FROM
+                (SELECT * from {0}) AS LHS
+                LEFT JOIN
+                (SELECT * FROM {1}) AS RHS
+                ON LHS.id=RHS.id) AS sq3
+                WHERE state = {2})::numeric,2)::float AS hmo_deviation FROM (SELECT LHS.id,LHS.state,RHS.carrier_reimb,RHS.bene_resp,RHS.hmo_mo FROM
+                (SELECT * from {0}) AS LHS
+                LEFT JOIN
+                (SELECT * FROM {1}) AS RHS
+                ON LHS.id=RHS.id) AS sq4
+                WHERE state = {2}
+                ORDER BY carrier_deviation;""".format(table_name1,table_name2,"'"+cleaned_state+"'")
+        
+        result = execute_query(cur, query)
+        
+        deviations = {'deviations':[]}
+        #df = pd.DataFrame(cur.fetchall(), columns=colnames)
+        for row in result:
+            patient = {'id':row[0], 'state':row[1], 'carrier_reimb deviation':row[2],'bene_resp deviation':row[3],'homo_mo deviation':row[4]}
+            deviations['deviations'].append(patient)
+    except Exception as e:
+        raise Exception("Error: {}".format(e.message))
+    return deviations
