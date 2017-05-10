@@ -762,7 +762,7 @@ def claims_deviations_by_state(state, db_name='hs611db', user_name='ATW', passwo
 def stat_select_for_sex(stat, sex,db_name='hs611db', user_name='ATW', password='', table_name1='cmspop', table_name2='cmsclaims'):
     """
     Calculates/returns the selected statistcal measure of age, carrier_reimnb, 
-    bene_resp, and hmo_mo for a specified sex.
+    bene_resp, and hmo_mo of those who are dead for a specified sex.
 
     Parameters
     ----------
@@ -811,14 +811,17 @@ def stat_select_for_sex(stat, sex,db_name='hs611db', user_name='ATW', password='
         con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
         
         if stat == 'mean':
-            query = """ SELECT sex, FLOOR(avg(age)) AS age, ROUND(avg(carrier_reimb)::numeric,2)::float AS avg_carrier_resp, ROUND(avg(bene_resp)::numeric,2)::float AS avg_bene_resp, ROUND(avg(hmo_mo)::numeric,2)::float AS avg_hmo_mo FROM (SELECT LHS.id,LHS.sex,LHS.state,FLOOR((LHS.dod-dob)/365) AS age, RHS.carrier_reimb,RHS.bene_resp,RHS.hmo_mo FROM
+            query = """ SELECT sex, FLOOR(avg(age)) AS age, ROUND(avg(carrier_reimb)::numeric,2)::float AS avg_carrier_resp, ROUND(avg(bene_resp)::numeric,2)::float AS avg_bene_resp, ROUND(avg(hmo_mo)::numeric,2)::float AS avg_hmo_mo 
+                    FROM (SELECT LHS.id,LHS.sex,LHS.state,FLOOR((LHS.dod-dob)/365) AS age, RHS.carrier_reimb,RHS.bene_resp,RHS.hmo_mo 
+                    FROM
                     (SELECT * FROM {0} WHERE dod IS NOT NULL) AS LHS
                     LEFT JOIN
                     (SELECT * FROM {1}) AS RHS
                     ON LHS.id=RHS.id WHERE sex = {2}) AS tbl1
                     GROUP by sex;""".format(table_name1,table_name2, "'"+cleaned_sex+"'")
         if stat == 'median':
-                query = """SELECT sex, FLOOR(median_age)::float AS median_age,ROUND(median_carrier_reimb,2)::float AS median_carrier_reimb, ROUND(median_bene_resp,2)::float AS median_bene_resp,ROUND(median_hmo_mo,2)::float AS median_hmo_mo  FROM (
+                query = """SELECT sex, FLOOR(median_age)::float AS median_age,ROUND(median_carrier_reimb,2)::float AS median_carrier_reimb, ROUND(median_bene_resp,2)::float AS median_bene_resp,ROUND(median_hmo_mo,2)::float AS median_hmo_mo  
+                    FROM (
                     (WITH med_age AS (SELECT age, row_number() OVER (ORDER BY age) AS row_id,
                     (SELECT COUNT(1) FROM (SELECT *, (dod-dob)/365 AS age FROM {0} WHERE dod IS NOT NULL) AS LHS
                     LEFT JOIN
