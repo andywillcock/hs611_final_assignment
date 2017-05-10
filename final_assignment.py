@@ -541,3 +541,95 @@ def hmo_mo_gt_average_for_state_disease(db_name, user_name, password, table_name
     except Exception as e:
         raise Exception("Error: {}".format(e.message))
     return gt_average  
+    
+def state_avg_life_expectancies_by_sex(db_name, user_name, password, table_name='cmspop', state): 
+    """
+    Returns the average life expectancies for each sex for a chosen state for 
+    people with none of the diseases (healthy) compared to those with one of the four
+    diseases and only that disease (For example: Those who only have 
+    cancer = 't' (depression, heart_fail, and alz_rel_sen all = 'f')
+
+    Parameters
+    ----------
+    db_name: str
+        name of database being accessed
+    user_name: str
+        username used to access the specfied database
+    password: str
+        password corresponding to user_name
+    table_name1: str
+        table of interest found within db_name 
+    state : str, 2unicode
+        state if interest
+
+    Returns
+    -------
+    life_expectancies
+        A labeled JSON object with the state, sex, healthy life expectancy,
+        alzheimers life expectancy, heart failure life expectancy, depression 
+        life expectancy, and cancer life expectancy.
+
+    Examples
+    --------
+    /api/v1/freq/depression
+    /api/v1/freq/diabetes
+    """
+    
+    states = ('AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'HI', 'IA', 'ID', 'IL', 
+        'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 
+        'NH', 'NJ', 'NM', 'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 
+        'VA', 'VT', 'WA', 'WI', 'WV', 'WY', 'Othr')
+    
+    
+    # Strip the user input to alpha characters only
+    
+    if state == 'Othr':
+        cleaned_state = 'Othr'
+    else:
+        cleaned_state = re.sub('\W+', '', state)
+        cleaned_state = cleaned_state.upper()
+    try:
+        if cleaned_state not in states:
+            raise AssertionError("State '{0}' is not allowed".format(cleaned_state)) 
+        if table_name1 != 'cmspop':
+            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+    
+        con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
+        query = """SELECT LHS4.state, LHS4.sex, avg_healthy_life_expectancy, avg_alzheimers_life_expectancy, avg_hf_life_expectancy, avg_depression_life_expectancy, avg_cancer_life_expectancy FROM 
+                (SELECT LHS3.state, LHS3.sex, avg_healthy_life_expectancy, avg_alzheimers_life_expectancy, avg_hf_life_expectancy, avg_depression_life_expectancy FROM 
+                (SELECT LHS2.state, LHS2.sex, avg_healthy_life_expectancy, avg_alzheimers_life_expectancy, avg_hf_life_expectancy FROM 
+                (SELECT LHS.state, LHS.sex, avg_healthy_life_expectancy, avg_alzheimers_life_expectancy FROM
+                (SELECT state, sex, FLOOR(avg(age))::integer as avg_healthy_life_expectancy 
+                FROM (SELECT state, sex, (dod-dob)/365 AS age from {0} WHERE dod IS NOT NULL AND alz_rel_sen = 'f' AND cancer = 'f' AND heart_fail = 'f' AND depression = 'f') AS sq1 
+                GROUP BY sex, state) AS LHS
+                LEFT JOIN
+                (SELECT state, sex, FLOOR(avg(age))::integer as avg_alzheimers_life_expectancy FROM (SELECT state, sex, (dod-dob)/365 AS age from {0} WHERE dod IS NOT NULL AND alz_rel_sen = 't' AND cancer = 'f' AND heart_fail = 'f' AND depression = 'f') AS sq2 
+                GROUP BY sex,state) AS RHS
+                ON LHS.state = RHS.state AND LHS.sex = RHS.sex) AS LHS2
+                LEFT JOIN 
+                (SELECT state, sex, FLOOR(avg(age))::integer as avg_hf_life_expectancy
+                FROM (SELECT state, sex, (dod-dob)/365 AS age from {0} WHERE dod IS NOT NULL AND heart_fail = 't' AND alz_rel_sen = 'f' AND cancer = 'f' AND depression = 'f') AS sq2 
+                GROUP BY sex,state) AS RHS2
+                ON LHS2.state = RHS2.state AND LHS2.sex = RHS2.sex) AS LHS3
+                LEFT JOIN
+                (SELECT state, sex, FLOOR(avg(age))::integer as avg_depression_life_expectancy
+                FROM (SELECT state, sex, (dod-dob)/365 AS age from {0} WHERE dod IS NOT NULL AND depression = 't' AND alz_rel_sen = 'f' AND cancer = 'f' AND heart_fail = 'f') AS sq2 
+                GROUP BY sex,state) AS RHS3
+                ON LHS3.state = RHS3.state AND LHS3.sex = RHS3.sex) AS LHS4
+                LEFT JOIN
+                (SELECT state, sex, FLOOR(avg(age))::integer as avg_cancer_life_expectancy
+                FROM (SELECT state, sex, (dod-dob)/365 AS age from {0} WHERE dod IS NOT NULL AND cancer= 't' AND alz_rel_sen = 'f' AND heart_fail = 'f' AND depression = 'f' ) AS sq2 
+                GROUP BY sex,state) AS RHS4
+                ON LHS4.state = RHS4.state AND LHS4.sex = RHS4.sex
+                WHERE LHS4.state = {1};""".format(table_name,"'"+cleaned_state+"'")
+        
+        result = execute_query(cur, query)
+        
+        life_expectancies = {'Life_Expectancies':[]}
+        for row in result:
+            expect = {'state':row[0], 'sex':row[1], 'avg healthy life expectancy':row[2],'avg alzheimers life expectancy':row[3],'avg heart failure life expectancy':row[4],'avg depression life expectancy':row[5],'avg cancer life expectancy':row[6]}
+            life_expectancies['Life_Expectancies'].append(expect)
+    except Exception as e:
+        raise Exception("Error: {}".format(e.message))
+    return life_expectancies  
+
