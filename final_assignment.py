@@ -164,3 +164,76 @@ def disease_max_carrier_bene_ratio_by_state_sex(db_name, user_name, password, ta
         raise Exception("Error: {}".format(e.message))
         
     return ratios
+
+
+                        
+def carrier_reimb_avgs_select_state(db_name, user_name, password, table_name='cmspop', state):
+    """
+    Calculate the state average of carrier reimbursement, hmo months, and beneificiary 
+    responsibility for a specified state.
+
+    Parameters
+    ----------
+    db_name: str
+        name of database being accessed
+    user_name: str
+        username used to access the specfied database
+    password: str
+        password corresponding to user_name
+    table_name1: str
+        table of interest found within db_name
+    table_name2: str
+        table of interest found within db_name
+    state : str, unicode
+        State abbreviation
+
+    Returns
+    -------
+    json
+        A labeled JSON object with the state and averages for each column value.
+
+    Examples
+    --------
+    /api/v1/freq/depression
+    /api/v1/freq/diabetes
+    """
+    
+    states = ('AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'HI', 'IA', 'ID', 'IL', 
+        'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 
+        'NH', 'NJ', 'NM', 'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 
+        'VA', 'VT', 'WA', 'WI', 'WV', 'WY', 'Othr')
+    # Strip the user input to alpha characters only
+    if state == 'Othr':
+        cleaned_state = 'Othr'
+    else:
+        cleaned_state = re.sub('\W+', '', state)
+        cleaned_state = cleaned_state.upper()
+    try:
+        if cleaned_state not in states:
+            raise AssertionError("State '{0}' is not allowed".format(cleaned_state))
+        if table_name1 != 'cmspop':
+            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+        if table_name2 != 'cmsclaims':
+            raise AssertionError("Table '{0}' is not allowed please use cmsclaims or a table with equivalent columns".format(table_name2))
+        con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
+        query = """SELECT LHS.state,ROUND(AVG(RHS.carrier_reimb)::numeric,2)::float AS avg_carrier_reimb, 
+                ROUND(AVG(RHS.bene_resp)::numeric,2)::float AS avg_bene_resp, 
+                ROUND(AVG(RHS.hmo_mo)::numeric,2)::float AS avg_hmo_mo
+                FROM                             
+                (SELECT * FROM {0}) AS LHS
+                LEFT JOIN                           
+                (SELECT * FROM {1}) AS RHS
+                ON LHS.id = RHS.id
+                WHERE state = {2}
+                GROUP BY LHS.state;""".format(TABLE_NAME_1,TABLE_NAME_2,"'"+cleaned_state+"'")
+        
+        result = execute_query(cur, query)
+        
+        claims_avgs = {'State_Averages':[]}
+        
+        for row in result:
+            freq = {'state':row[0], 'avg_carrier_reimb':row[1], 'avg_bene_resp':row[2], 'avg_hmo_mo':row[2]}
+            claims_avgs['State_Averages'].append(freq)
+    except Exception as e:
+        raise Exception("Error: {}".format(e.message))
+    return claims_avgs
