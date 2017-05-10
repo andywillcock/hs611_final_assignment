@@ -455,7 +455,7 @@ def max_total_cost_state_status(db_name, user_name, password, table_name1='cmspo
         result = execute_query(cur, query)
         
         max_total_cost = {'Max_Total_Cost':[]}
-        #df = pd.DataFrame(cur.fetchall(), columns=colnames)
+        
         for row in result:
             cost = {'id':row[0], 'state':row[1], 'status':row[2],'total_cost':row[3]}
             max_total_cost['Max_Total_Cost'].append(cost)
@@ -708,7 +708,7 @@ def claims_deviations_by_state(db_name, user_name, password, table_name1='cmspop
         result = execute_query(cur, query)
         
         deviations = {'deviations':[]}
-        #df = pd.DataFrame(cur.fetchall(), columns=colnames)
+        
         for row in result:
             patient = {'id':row[0], 'state':row[1], 'carrier_reimb deviation':row[2],'bene_resp deviation':row[3],'homo_mo deviation':row[4]}
             deviations['deviations'].append(patient)
@@ -899,7 +899,7 @@ def stat_select_for_sex(db_name, user_name, password, table_name1='cmspop', tabl
         result = execute_query(cur, query)
         
         stat_dict = {'statistic':[]}
-        #df = pd.DataFrame(cur.fetchall(), columns=colnames)
+        
         if stat == 'mean':
             for row in result:
                 statistic = {'sex':row[0], 'age':row[1], 'mean_carrier_reimb':row[2],'mean_bene_resp':row[3],'mean_homo_mo devations':row[4]}
