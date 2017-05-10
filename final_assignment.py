@@ -4,7 +4,6 @@ import psycopg2
 from psycopg2 import extras
 import json
 from exceptions import Exception, AssertionError
-import pandas as pd
 
 def cursor_connect(db_name, user_name, password, cursor_factory=None):
     """
@@ -56,7 +55,32 @@ def execute_query(cursor,query):
     return result
     
 def disease_count_by_race(db_name, user_name, password, table_name='cmspop', disease):   
-    
+    """
+    Counts the number of cases of a specified disease for each race
+
+    Parameters
+    ----------
+    db_name: str
+        name of database being accessed
+    user_name: str
+        username used to access the specfied database
+    password: str
+        password corresponding to user_name
+    table_name: str
+        cmspop or table with identical column names
+    disease : str
+        Disease of interest
+
+    Returns
+    -------
+    json
+        A labeled JSON object with the state and averages for each column value.
+
+    Examples
+    --------
+    /api/v1/freq/depression
+    /api/v1/freq/cancer
+    """    
     diseases = ('heart_fail','alz_rel_sen','depression','cancer')
     table_names = ('cmspop')
     # Strip the user input to alpha characters only
@@ -96,20 +120,23 @@ def disease_max_carrier_bene_ratio_by_state_sex(db_name, user_name, password, ta
         username used to access the specfied database
     password: str
         password corresponding to user_name
-    table_name: str
-        table of interest found within db_name
-    state : str, unicode
+    table_name1: str
+        cmspop or table with identical column names
+    table_name2: str
+        cmsclaims or table with identical column names
+    state : str
         State abbreviation
 
     Returns
     -------
     json
-        A labeled JSON object with the state and averages for each column value.
+        A labeled JSON object with the id, sex, state, and max carrier_bene_ratio
+        averages for the specified disease.
 
     Examples
     --------
-    /api/v1/freq/depression
-    /api/v1/freq/diabetes
+    /api/v1/max_carrier_bene/depression/WA
+    /api/v1/max_carrier_bene/diabetes/CA
     """        
     diseases = ('heart_fail','alz_rel_sen','depression','cancer')
     states = ('AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'HI', 'IA', 'ID', 'IL', 
@@ -167,7 +194,7 @@ def disease_max_carrier_bene_ratio_by_state_sex(db_name, user_name, password, ta
 
 
                         
-def carrier_reimb_avgs_select_state(db_name, user_name, password, table_name='cmspop', state):
+def carrier_reimb_avgs_select_state(db_name, user_name, password, table_name1='cmspop', table_name2='cmsclaims', state):
     """
     Calculate the state average of carrier reimbursement, hmo months, and beneificiary 
     responsibility for a specified state.
@@ -181,10 +208,10 @@ def carrier_reimb_avgs_select_state(db_name, user_name, password, table_name='cm
     password: str
         password corresponding to user_name
     table_name1: str
-        table of interest found within db_name
+        cmspop or table with identical column names
     table_name2: str
-        table of interest found within db_name
-    state : str, unicode
+        cmsclaims or table with identical column names
+    state : str
         State abbreviation
 
     Returns
@@ -194,8 +221,8 @@ def carrier_reimb_avgs_select_state(db_name, user_name, password, table_name='cm
 
     Examples
     --------
-    /api/v1/freq/depression
-    /api/v1/freq/diabetes
+    /api/v1/carrier_reimb_avg/HI
+    /api/v1/carrier_reimb_avg/AL
     """
     
     states = ('AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'HI', 'IA', 'ID', 'IL', 
@@ -225,7 +252,7 @@ def carrier_reimb_avgs_select_state(db_name, user_name, password, table_name='cm
                 (SELECT * FROM {1}) AS RHS
                 ON LHS.id = RHS.id
                 WHERE state = {2}
-                GROUP BY LHS.state;""".format(TABLE_NAME_1,TABLE_NAME_2,"'"+cleaned_state+"'")
+                GROUP BY LHS.state;""".format(table_name2,table_name2,"'"+cleaned_state+"'")
         
         result = execute_query(cur, query)
         
@@ -251,11 +278,11 @@ def avg_death_age_for_concurrent_disease_by_sex(db_name, user_name, password, ta
         username used to access the specfied database
     password: str
         password corresponding to user_name
-    table_name: str
-        table of interest found within db_name
-    disease1 : str, unicode
+    table_name1: str
+        cmspop or table with identical column names
+    disease1 : str
         disease type
-    disease2 : str, unicode
+    disease2 : str
         disease type
         
     Returns
@@ -266,8 +293,8 @@ def avg_death_age_for_concurrent_disease_by_sex(db_name, user_name, password, ta
 
     Examples
     --------
-    /api/v1/freq/depression
-    /api/v1/freq/diabetes
+    /api/v1/avg_age_of_death/depression/heart_fail
+    /api/v1/avg_age_of_death/cancer/alz_rel_sen
     """
     
     diseases = ('heart_fail','alz_rel_sen','depression','cancer')
@@ -310,9 +337,11 @@ def high_and_low_carrier_reimb_state(db_name, user_name, password, table_name1='
         username used to access the specfied database
     password: str
         password corresponding to user_name
-    table_name: str
-        table of interest found within db_name
-    race : str, 2unicode
+    table_name1: str
+        cmspop or table with identical column names
+    table_name2: str
+        cmsclaims or table with identical column names
+    race : str
         race of persons of interest
 
     Returns
@@ -323,8 +352,8 @@ def high_and_low_carrier_reimb_state(db_name, user_name, password, table_name1='
 
     Examples
     --------
-    /api/v1/freq/depression
-    /api/v1/freq/diabetes
+    /api/v1/max_min_carrier_reimb/black
+    /api/v1/max_min_carrier_reimb/others
     """
     
     races = ('white','black','hispanic','others')
@@ -388,12 +417,12 @@ def max_total_cost_state_status(db_name, user_name, password, table_name1='cmspo
     password: str
         password corresponding to user_name
     table_name1: str
-        table of interest found within db_name
+        cmspop or table with identical column names
     table_name2: str
-        table of interest found within db_name 
-    state : str, 2unicode
+        cmsclaims or table with identical column names
+    state : str
         state if interest
-    status : str, 2unicode
+    status : str
         person's alive or dead status
 
     Returns
@@ -403,8 +432,8 @@ def max_total_cost_state_status(db_name, user_name, password, table_name1='cmspo
 
     Examples
     --------
-    /api/v1/freq/depression
-    /api/v1/freq/diabetes
+    /api/v1/total_cost/MA/dead
+    /api/v1/total_cost/OR/alive
     """
     states = ('AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'HI', 'IA', 'ID', 'IL', 
         'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 
@@ -478,12 +507,12 @@ def hmo_mo_gt_average_for_state_disease(db_name, user_name, password, table_name
     password: str
         password corresponding to user_name
     table_name1: str
-        table of interest found within db_name
+        cmspop or table with identical column names
     table_name2: str
-        table of interest found within db_name 
-    state : str, 2unicode
-        state if interest
-    disease : str, 2unicode
+        cmsclaims or table with identical column names
+    state : str
+        state of interest
+    disease : str
         disease of interest
 
     Returns
@@ -493,8 +522,8 @@ def hmo_mo_gt_average_for_state_disease(db_name, user_name, password, table_name
 
     Examples
     --------
-    /api/v1/freq/depression
-    /api/v1/freq/diabetes
+    /api/v1/gt_hmo_avg/CO/depression
+    /api/v1/gt_hmo_avg/AK/cancer
     """
     states = ('AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'HI', 'IA', 'ID', 'IL', 
         'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 
@@ -558,8 +587,8 @@ def state_avg_life_expectancies_by_sex(db_name, user_name, password, table_name=
     password: str
         password corresponding to user_name
     table_name1: str
-        table of interest found within db_name 
-    state : str, 2unicode
+        cmspop or table with identical column names
+    state : str
         state if interest
 
     Returns
@@ -571,8 +600,8 @@ def state_avg_life_expectancies_by_sex(db_name, user_name, password, table_name=
 
     Examples
     --------
-    /api/v1/freq/depression
-    /api/v1/freq/diabetes
+    /api/v1/avg_life_expectancy/AZ
+    /api/v1/avg_life_expectancy/TX
     """
     
     states = ('AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'HI', 'IA', 'ID', 'IL', 
@@ -647,10 +676,10 @@ def claims_deviations_by_state(db_name, user_name, password, table_name1='cmspop
     password: str
         password corresponding to user_name
     table_name1: str
-        table of interest found within db_name
+        cmspop or table with identical column names
     table_name2: str
-        table of interest found within db_name 
-    state : str, 2unicode
+        cmsclaims or table with identical column names
+    state : str
         state if interest
 
     Returns
@@ -661,8 +690,8 @@ def claims_deviations_by_state(db_name, user_name, password, table_name1='cmspop
 
     Examples
     --------
-    /api/v1/freq/depression
-    /api/v1/freq/diabetes
+    /api/v1/deviations/MD
+    /api/v1/deviations/NC
     """
     states = ('AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'HI', 'IA', 'ID', 'IL', 
         'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 
@@ -730,12 +759,12 @@ def stat_select_for_sex(db_name, user_name, password, table_name1='cmspop', tabl
     password: str
         password corresponding to user_name
     table_name1: str
-        table of interest found within db_name
+        cmspop or table with identical column names
     table_name2: str
-        table of interest found within db_name 
-    stat : str, 2unicode
+        cmsclaims or table with identical column names
+    stat : str
         statistical measurement of interest
-    sex: str. 2unicode
+    sex: str
         sex for the statistic to be calculated for
 
     Returns
@@ -746,8 +775,8 @@ def stat_select_for_sex(db_name, user_name, password, table_name1='cmspop', tabl
 
     Examples
     --------
-    /api/v1/freq/depression
-    /api/v1/freq/diabetes
+    /api/v1/stats/median/male
+    /api/v1/stats/sd/female
     """
     stats = ('mean','median','sd')
     sexes = ('male','female')
