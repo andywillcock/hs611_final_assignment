@@ -80,3 +80,87 @@ def disease_count_by_race(db_name, user_name, password, table_name='cmspop', dis
     except Exception as e:
         raise Exception("Error: {}".format(e.message))
     return disease_counts       
+
+
+def disease_max_carrier_bene_ratio_by_state_sex(db_name, user_name, password, table_name1='cmspop', table_name2='cmsclaims', disease,state):
+    """
+    Calcualtes the maximum ratio of carrier_reimb/bene_resp and returns the id(s) 
+    of the person with that ratio for those in a specified state and having
+    a specified disease. 
+
+    Parameters
+    ----------
+    db_name: str
+        name of database being accessed
+    user_name: str
+        username used to access the specfied database
+    password: str
+        password corresponding to user_name
+    table_name: str
+        table of interest found within db_name
+    state : str, unicode
+        State abbreviation
+
+    Returns
+    -------
+    json
+        A labeled JSON object with the state and averages for each column value.
+
+    Examples
+    --------
+    /api/v1/freq/depression
+    /api/v1/freq/diabetes
+    """        
+    diseases = ('heart_fail','alz_rel_sen','depression','cancer')
+    states = ('AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'HI', 'IA', 'ID', 'IL', 
+        'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 
+        'NH', 'NJ', 'NM', 'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 
+        'VA', 'VT', 'WA', 'WI', 'WV', 'WY', 'Othr')
+    
+    # Strip the user input to alpha characters only
+    cleaned_disease = re.sub('\W+', '', disease)
+    if state == 'Othr':
+        cleaned_state = 'Othr'
+    else:
+        cleaned_state = re.sub('\W+', '', state)
+        cleaned_state = "'"+cleaned_state.upper()+"'"
+    
+    # Strip the user input to alpha characters only
+    try:
+        if disease not in diseases:
+            raise AssertionError("Disease '{0}' is not allowed".format(cleaned_disease))
+        if state not in states:
+             raise AssertionError("State '{0}' is not allowed".format(cleaned_state))
+        if table_name1 != 'cmspop':
+            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+        if table_name2 != 'cmsclaims':
+            raise AssertionError("Table '{0}' is not allowed please use cmsclaims or a table with equivalent columns".format(table_name2))
+        con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
+        query = """SELECT id, sex, state, MAX(carrier_bene_ratio)::float AS carrier_bene_ratio FROM 
+                (SELECT LHS.*, carrier_reimb::float/bene_resp::float AS carrier_bene_ratio FROM
+                (SELECT * FROM {0}) AS LHS
+                LEFT JOIN
+                (SELECT * from {1}) AS RHS
+                ON LHS.id = RHS.id 
+                WHERE bene_resp > 0 AND {2} = 't' AND state = {3}) as sq1 
+		 WHERE carrier_bene_ratio = (SELECT MAX(carrier_bene_ratio)::float AS carrier_bene_ratio FROM 
+                (SELECT LHS.*, carrier_reimb::float/bene_resp::float AS carrier_bene_ratio FROM
+                (SELECT * FROM {0}) AS LHS
+                LEFT JOIN
+                (SELECT * from {1}) AS RHS
+                ON LHS.id = RHS.id 
+                WHERE bene_resp > 0 AND {2} = 't' AND state = {3}) AS sq2)
+		 GROUP BY id, sex, state
+		 ORDER BY carrier_bene_ratio DESC;""".format(table_name1,table_name2,cleaned_disease,cleaned_state)
+        
+        result = execute_query(cur, query)
+        
+        ratios = {'Max_Carrier_Resp/Bene_Resp':[]}
+        for row in result:
+            ratio = {'id':row[0],'sex':row[1],'state':row[2],'carrier_reimb/bene_resp ratio':row[3]}
+            ratios['Max_Carrier_Resp/Bene_Resp'].append(ratio)
+            
+    except Exception as e:
+        raise Exception("Error: {}".format(e.message))
+        
+    return ratios
