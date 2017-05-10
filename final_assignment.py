@@ -462,3 +462,82 @@ def max_total_cost_state_status(db_name, user_name, password, table_name1='cmspo
     except Exception as e:
         raise Exception("Error: {}".format(e.message))
     return max_total_cost
+    
+    
+def hmo_mo_gt_average_for_state_disease(db_name, user_name, password, table_name1='cmspop', table_name2='cmsclaims', state, disease):
+    """
+    Returns the rows with hmo_mo values for those with a chosen disease greater 
+    than the average hmo_mo value for that sample.
+
+    Parameters
+    ----------
+    db_name: str
+        name of database being accessed
+    user_name: str
+        username used to access the specfied database
+    password: str
+        password corresponding to user_name
+    table_name1: str
+        table of interest found within db_name
+    table_name2: str
+        table of interest found within db_name 
+    state : str, 2unicode
+        state if interest
+    disease : str, 2unicode
+        disease of interest
+
+    Returns
+    -------
+    gt_average
+        A labeled JSON object with the id, state, disease diagnosis, and hmo_mo
+
+    Examples
+    --------
+    /api/v1/freq/depression
+    /api/v1/freq/diabetes
+    """
+    states = ('AK', 'AL', 'AR', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA', 'HI', 'IA', 'ID', 'IL', 
+        'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME', 'MI', 'MN', 'MO', 'MS', 'MT', 'NC', 'ND', 'NE', 
+        'NH', 'NJ', 'NM', 'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 
+        'VA', 'VT', 'WA', 'WI', 'WV', 'WY', 'Othr')
+    diseases = ('heart_fail','alz_rel_sen','depression','cancer')
+    # Strip the user input to alpha characters only
+    if state == 'Othr':
+        cleaned_state = 'Othr'
+    else:
+        cleaned_state = re.sub('\W+', '', state)
+        cleaned_state = cleaned_state.upper()
+    cleaned_disease = re.sub('\W+', '', disease)
+    try:
+        if cleaned_state not in states:
+            raise AssertionError("Race '{0}' is not allowed".format(cleaned_state))
+        if cleaned_disease not in diseases:
+            raise AssertionError("Race '{0}' is not allowed".format(cleaned_disease))    
+        if table_name1 != 'cmspop':
+            raise AssertionError("Table '{0}' is not allowed please use cmspop or a table with equivalent columns".format(table_name1))
+        if table_name2 != 'cmsclaims':
+            raise AssertionError("Table '{0}' is not allowed please use cmsclaims or a table with equivalent columns".format(table_name2))
+        con, cur = cursor_connect(db_name, user_name, password, cursor_factory=None)
+        query = """SELECT id, state, {3},hmo_mo 
+                FROM (SELECT LHS.id,state,{3},hmo_mo  
+                FROM (SELECT * FROM {0}) AS LHS
+                LEFT JOIN                                     
+                (SELECT * from {1}) AS RHS
+                ON LHS.id = RHS.id WHERE state = {2} AND {3} = 't') as sq1
+                WHERE hmo_mo > (SELECT avg(hmo_mo) AS avg_hmo_mo 
+                FROM (SELECT LHS.id, state, cancer, hmo_mo  
+                FROM (SELECT * FROM {0}) AS LHS
+                LEFT JOIN                                     
+                (SELECT * from {1}) AS RHS
+                ON LHS.id = RHS.id WHERE state = {2} AND {3} = 't')as sq2);""".format(table_name1,table_name2,"'"+cleaned_state+"'",cleaned_disease)
+        
+        result = execute_query(cur, query)
+        
+        gt_average = {'Greater_Than_Average_HMO_MO':[]}
+        
+        for row in result:
+            gt_avg = {'id':row[0], 'state':row[1], cleaned_disease:row[2],'hmo_mo':row[3]}
+            gt_average['Greater_Than_Average_HMO_MO'].append(gt_avg)
+    except Exception as e:
+        raise Exception("Error: {}".format(e.message))
+    return gt_average  
